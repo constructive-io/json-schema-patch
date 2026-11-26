@@ -151,6 +151,7 @@ export class JSONSchemaPatch {
               const fullPath = currentPath + '/' + key;
               const op: Operation = { op: 'remove', path: fullPath };
               applyPatch(this.schema, [op]);
+              this.removePropertyWithEmptyComposition(currentPath);
             }
           }
           // Recurse further into the object
@@ -161,6 +162,16 @@ export class JSONSchemaPatch {
 
     // Start the recursive search from the root of the schema
     findPaths(this.schema, '');
+  }
+
+  // Remove a property whose allOf/anyOf/oneOf list was emptied by a definition removal
+  private removePropertyWithEmptyComposition(compositionPath: string): void {
+    const match = compositionPath.match(/^(.*)\/properties\/([^/]+)\/(allOf|anyOf|oneOf)$/);
+    if (!match) return;
+    const composition = getValueAtPath(this.schema, compositionPath);
+    if (Array.isArray(composition) && composition.length === 0) {
+      this.removeProperty(match[1], match[2]);
+    }
   }
 
   // Add a property at a specified path

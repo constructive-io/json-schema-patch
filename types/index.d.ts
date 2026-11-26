@@ -15,6 +15,7 @@ export declare class JSONSchemaPatch {
     addDefinition(name: string, definition: any): void;
     removeDefinition(name: string): void;
     private removePropertiesUsingDefinition;
+    private removePropertyWithEmptyComposition;
     addProperty(path: string, propertyName: string, property: any): void;
     removeProperty(path: string, propertyName: string): void;
     private removeRequiredFromProperty;
