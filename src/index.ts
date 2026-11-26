@@ -135,7 +135,11 @@ export class JSONSchemaPatch {
   // Helper method to remove properties that reference a specific definition
   private removePropertiesUsingDefinition(defName: string): void {
     const findPaths = (obj: any, currentPath: string) => {
-      Object.entries(obj).forEach(([key, value]) => {
+      const entries = Object.entries(obj);
+      // Walk arrays from the end so removing an item doesn't shift the ones still to visit
+      if (Array.isArray(obj)) entries.reverse();
+      entries.forEach(([key, value]) => {
+        if (getValueAtPath(this.schema, currentPath) !== obj) return;
         if (typeof value === 'object' && value !== null) {
           // Check if the object has a $ref that matches the definition
           //@ts-ignore
@@ -164,13 +168,18 @@ export class JSONSchemaPatch {
     findPaths(this.schema, '');
   }
 
-  // Remove a property whose allOf/anyOf/oneOf list was emptied by a definition removal
+  // Drop an allOf/anyOf/oneOf list emptied by a definition removal; a property left with no rules is removed
   private removePropertyWithEmptyComposition(compositionPath: string): void {
-    const match = compositionPath.match(/^(.*)\/properties\/([^/]+)\/(allOf|anyOf|oneOf)$/);
+    const match = compositionPath.match(/^(.*)\/(allOf|anyOf|oneOf)$/);
     if (!match) return;
     const composition = getValueAtPath(this.schema, compositionPath);
-    if (Array.isArray(composition) && composition.length === 0) {
-      this.removeProperty(match[1], match[2]);
+    if (!Array.isArray(composition) || composition.length > 0) return;
+    const owner = getValueAtPath(this.schema, match[1]);
+    const property = match[1].match(/^(.*)\/properties\/([^/]+)$/);
+    if (property && Object.keys(owner).length === 1) {
+      this.removeProperty(property[1], property[2]);
+    } else {
+      applyPatch(this.schema, [{ op: 'remove', path: compositionPath }]);
     }
   }
 
