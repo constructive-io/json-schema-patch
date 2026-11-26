@@ -39,3 +39,41 @@ describe('JSONSchemaPatch - Remove Complex allOf References', () => {
     });
   });
 });
+
+describe('JSONSchemaPatch - Remove definitions from compositions with other rules', () => {
+  it('keeps a property that still has other rules and its required entry', () => {
+    const schema = {
+      $defs: { asset: { type: "object" } },
+      properties: {
+        item: { description: "an item", allOf: [{ $ref: "#/$defs/asset" }] }
+      },
+      required: ["item"]
+    };
+    new JSONSchemaPatch(schema).removeDefinition('asset');
+    expect(schema).toEqual({
+      $defs: {},
+      properties: { item: { description: "an item" } },
+      required: ["item"]
+    });
+  });
+
+  it('handles several references to the same definition on one property', () => {
+    const schema = {
+      $defs: { asset: { type: "object" } },
+      properties: {
+        item: {
+          allOf: [{ $ref: "#/$defs/asset" }],
+          anyOf: [{ $ref: "#/$defs/asset" }, { $ref: "#/$defs/asset" }]
+        },
+        name: { type: "string" }
+      },
+      required: ["item", "name"]
+    };
+    new JSONSchemaPatch(schema).removeDefinition('asset');
+    expect(schema).toEqual({
+      $defs: {},
+      properties: { name: { type: "string" } },
+      required: ["name"]
+    });
+  });
+});

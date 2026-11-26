@@ -135,7 +135,11 @@ export class JSONSchemaPatch {
   // Helper method to remove properties that reference a specific definition
   private removePropertiesUsingDefinition(defName: string): void {
     const findPaths = (obj: any, currentPath: string) => {
-      Object.entries(obj).forEach(([key, value]) => {
+      const entries = Object.entries(obj);
+      // Walk arrays from the end so removing an item doesn't shift the ones still to visit
+      if (Array.isArray(obj)) entries.reverse();
+      entries.forEach(([key, value]) => {
+        if (getValueAtPath(this.schema, currentPath) !== obj) return;
         if (typeof value === 'object' && value !== null) {
           // Check if the object has a $ref that matches the definition
           //@ts-ignore
@@ -151,6 +155,7 @@ export class JSONSchemaPatch {
               const fullPath = currentPath + '/' + key;
               const op: Operation = { op: 'remove', path: fullPath };
               applyPatch(this.schema, [op]);
+              this.removePropertyWithEmptyComposition(currentPath);
             }
           }
           // Recurse further into the object
@@ -161,6 +166,21 @@ export class JSONSchemaPatch {
 
     // Start the recursive search from the root of the schema
     findPaths(this.schema, '');
+  }
+
+  // Drop an allOf/anyOf/oneOf list emptied by a definition removal; a property left with no rules is removed
+  private removePropertyWithEmptyComposition(compositionPath: string): void {
+    const match = compositionPath.match(/^(.*)\/(allOf|anyOf|oneOf)$/);
+    if (!match) return;
+    const composition = getValueAtPath(this.schema, compositionPath);
+    if (!Array.isArray(composition) || composition.length > 0) return;
+    const owner = getValueAtPath(this.schema, match[1]);
+    const property = match[1].match(/^(.*)\/properties\/([^/]+)$/);
+    if (property && Object.keys(owner).length === 1) {
+      this.removeProperty(property[1], property[2]);
+    } else {
+      applyPatch(this.schema, [{ op: 'remove', path: compositionPath }]);
+    }
   }
 
   // Add a property at a specified path
